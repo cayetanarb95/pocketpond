@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket Pond</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&family=Nunito:wght@400;600;700&display=swap');
+
+  :root{
+    --water-deep: #123b3a;
+    --water-mid: #1f5c56;
+    --water-light: #2f7a6e;
+    --stone: #e4d8c4;
+    --stone-dark: #c9b896;
+    --panel: #fbf6ea;
+    --ink: #24352f;
+    --koi-orange: #e8783f;
+    --koi-cream: #f3d9a4;
+    --accent: #d96b3f;
+  }
+  [data-time="night"]{
+    --water-deep: #0a1a2e;
+    --water-mid: #142f4a;
+    --water-light: #1f4463;
+    --stone: #cfc6b8;
+    --stone-dark: #a89f8f;
+    --panel: #f1ede2;
+    --ink: #1c2430;
+    --accent: #d96b3f;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    height:100%;
+    width:100%;
+    background: radial-gradient(ellipse at top, #dfe9e3, #b9c9be);
+    font-family: 'Nunito', sans-serif;
+    color: var(--ink);
+    overflow: hidden;
+    transition: background 0.8s ease;
+  }
+  [data-time="night"] body{
+    background: radial-gradient(ellipse at top, #2a3348, #10131e);
+  }
+
+  .scene{
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .frame{
+    position: relative;
+    width: min(92vw, 640px);
+    height: min(78vh, 640px);
+    border-radius: 50%;
+    padding: 22px;
+    background: linear-gradient(160deg, var(--stone), var(--stone-dark));
+    box-shadow:
+      0 30px 60px -20px rgba(0,0,0,0.35),
+      inset 0 0 0 2px rgba(255,255,255,0.25);
+    transition: background 0.8s ease;
+  }
+
+  canvas{
+    display:block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    cursor: crosshair;
+    box-shadow: inset 0 10px 30px rgba(0,0,0,0.35), inset 0 -6px 18px rgba(0,0,0,0.25);
+  }
+
+  .title{
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: none;
+    user-select: none;
+  }
+  .title h1{
+    font-family: 'Fredoka', sans-serif;
+    font-weight: 600;
+    font-size: clamp(22px, 4vw, 30px);
+    margin: 0;
+    color: var(--ink);
+    letter-spacing: 0.3px;
+  }
+  .title span{
+    display:block;
+    font-size: 13px;
+    color: var(--ink);
+    opacity: 0.6;
+    margin-top: 2px;
+  }
+
+  .hud{
+    position: absolute;
+    bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .pill{
+    background: var(--panel);
+    border-radius: 999px;
+    padding: 9px 16px;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+  }
+  .pill:hover{ transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+  .pill:active{ transform: translateY(0px) scale(0.97); }
+  .pill.toggle{ background: var(--accent); color: #fff; }
+
+  .hint{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%,-50%);
+    background: rgba(251,246,234,0.92);
+    padding: 10px 18px;
+    border-radius: 14px;
+    font-family: 'Fredoka', sans-serif;
+    font-size: 14px;
+    color: var(--ink);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+    text-align: center;
+    max-width: 70%;
+  }
+  .hint.hidden{ opacity: 0; }
+
+  .credit{
+    position:absolute;
+    bottom: 4px;
+    right: 10px;
+    font-size: 10px;
+    opacity: 0.35;
+    font-family: 'Nunito', sans-serif;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .pill{ transition: none; }
+  }
+</style>
+</head>
+<body data-time="day">
+<div class="scene">
+  <div class="title">
+    <h1>🐟 Pocket Pond</h1>
+    <span>tap the water to feed your koi</span>
+  </div>
+
+  <div class="frame">
+    <canvas id="pond"></canvas>
+  </div>
+
+  <div class="hint" id="hint">tap anywhere in the pond ✨</div>
+
+  <div class="hud">
+    <div class="pill" id="fedCount">🍙 fed: 0</div>
+    <button class="pill toggle" id="timeToggle">☀️ day</button>
+    <button class="pill" id="addFish">➕ fish</button>
+  </div>
+
+  <div class="credit">made with Claude</div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('pond');
+  const ctx = canvas.getContext('2d');
+  const frame = document.querySelector('.frame');
+  const hint = document.getElementById('hint');
+  const fedCountEl = document.getElementById('fedCount');
+  const timeToggle = document.getElementById('timeToggle');
+  const addFishBtn = document.getElementById('addFish');
+
+  let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  let fedCount = 0;
+  let isNight = false;
+
+  function resize(){
+    const rect = canvas.getBoundingClientRect();
+    W = rect.width;
+    H = rect.height;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- helpers ----------
+  function rand(a,b){ return a + Math.random()*(b-a); }
+  function dist(x1,y1,x2,y2){ return Math.hypot(x2-x1, y2-y1); }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  // ---------- lily pads ----------
+  const pads = [];
+  function makePads(n){
+    pads.length = 0;
+    for(let i=0;i<n;i++){
+      pads.push({
+        x: rand(0.15,0.85),
+        y: rand(0.15,0.85),
+        r: rand(14,26),
+        driftPhase: rand(0, Math.PI*2),
+        driftSpeed: rand(0.15,0.3),
+        rot: rand(0, Math.PI*2)
+      });
+    }
+  }
+
+  // ---------- food ----------
+  const foods = [];
+  function dropFood(x,y){
+    foods.push({ x, y, r: 4, life: 1, t: 0 });
+  }
+
+  // ---------- ripples ----------
+  const ripples = [];
+  function addRipple(x,y,strength){
+    ripples.push({ x, y, r: 2, alpha: 0.5*strength, speed: rand(1.2,1.8) });
+  }
+
+  // ---------- bubbles (ambient) ----------
+  const bubbles = [];
+  function seedBubbles(n){
+    bubbles.length = 0;
+    for(let i=0;i<n;i++){
+      bubbles.push({
+        x: rand(0,1), y: rand(0,1),
+        r: rand(1,2.5),
+        speed: rand(0.05,0.15),
+        wobble: rand(0,Math.PI*2)
+      });
+    }
+  }
+
+  // ---------- koi ----------
+  const koiPalettes = [
+    { body: '#e8783f', spot: '#f6efe0' },
+    { body: '#f2b6a0', spot: '#e8783f' },
+    { body: '#f6efe0', spot: '#2c2c2c' },
+    { body: '#e8783f', spot: '#2c2c2c' },
+    { body: '#f0d27a', spot: '#e8783f' }
+  ];
+
+  class Koi{
+    constructor(x,y){
+      this.x = x; this.y = y;
+      this.angle = rand(0, Math.PI*2);
+      this.speed = rand(0.35, 0.6);
+      this.wiggle = rand(0, Math.PI*2);
+      this.wiggleSpeed = rand(0.12,0.18);
+      this.len = rand(26, 34);
+      this.palette = koiPalettes[Math.floor(rand(0,koiPalettes.length))];
+      this.target = null;
+      this.wanderAngle = this.angle;
+      this.scale = 1;
+      this.eatenPulse = 0;
+    }
+    update(dt){
+      // find nearest food
+      if(!this.target || this.target.eaten){
+        let nearest = null, nd = Infinity;
+        for(const f of foods){
+          if(f.eaten) continue;
+          const d = dist(this.x, this.y, f.x, f.y);
+          if(d < nd){ nd = d; nearest = f; }
+        }
+        this.target = nearest;
+      }
+
+      let desiredAngle;
+      if(this.target){
+        desiredAngle = Math.atan2(this.target.y - this.y, this.target.x - this.x);
+        const d = dist(this.x, this.y, this.target.x, this.target.y);
+        if(d < 10){
+          this.target.eaten = true;
+          this.eatenPulse = 1;
+          fedCount++;
+          fedCountEl.textContent = '🍙 fed: ' + fedCount;
+          addRipple(this.target.x, this.target.y, 0.6);
+          this.target = null;
+        }
+      } else {
+        this.wanderAngle += rand(-0.25,0.25) * dt * 2;
+        desiredAngle = this.wanderAngle;
+      }
+
+      // steer smoothly
+      let diff = desiredAngle - this.angle;
+      while(diff > Math.PI) diff -= Math.PI*2;
+      while(diff < -Math.PI) diff += Math.PI*2;
+      this.angle += diff * clamp(dt*2.2, 0, 0.2);
+
+      const spd = this.target ? this.speed*1.6 : this.speed;
+      this.x += Math.cos(this.angle) * spd * dt * 60 * 0.016;
+      this.y += Math.sin(this.angle) * spd * dt * 60 * 0.016;
+
+      // keep inside circular pond
+      const cx = W/2, cy = H/2, R = Math.min(W,H)/2 - 18;
+      const d = dist(this.x, this.y, cx, cy);
+      if(d > R){
+        const toCenter = Math.atan2(cy-this.y, cx-this.x);
+        this.angle = this.angle*0.7 + toCenter*0.3;
+        this.wanderAngle = this.angle;
+        this.x = cx + (this.x-cx) * (R/d) * 0.98;
+        this.y = cy + (this.y-cy) * (R/d) * 0.98;
+      }
+
+      this.wiggle += this.wiggleSpeed * dt * 60 * 0.016;
+      this.eatenPulse *= 0.9;
+    }
+    draw(ctx){
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.angle);
+      const s = 1 + this.eatenPulse*0.15;
+      ctx.scale(s,s);
+
+      const bodyLen = this.len;
+      const bodyW = bodyLen*0.34;
+      const wig = Math.sin(this.wiggle) * 0.18;
+
+      ctx.fillStyle = this.palette.body;
+      ctx.beginPath();
+      ctx.moveTo(bodyLen/2, 0);
+      ctx.quadraticCurveTo(bodyLen*0.2, -bodyW + wig*8, -bodyLen*0.3, -bodyW*0.5);
+      ctx.quadraticCurveTo(-bodyLen*0.55, 0, -bodyLen*0.3, bodyW*0.5);
+      ctx.quadraticCurveTo(bodyLen*0.2, bodyW - wig*8, bodyLen/2, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // tail
+      ctx.save();
+      ctx.translate(-bodyLen*0.5, 0);
+      ctx.rotate(wig*1.4);
+      ctx.fillStyle = this.palette.body;
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.lineTo(-bodyLen*0.42, -bodyW*0.9);
+      ctx.lineTo(-bodyLen*0.28, 0);
+      ctx.lineTo(-bodyLen*0.42, bodyW*0.9);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+
+      // spots
+      ctx.fillStyle = this.palette.spot;
+      ctx.beginPath();
+      ctx.ellipse(bodyLen*0.05, -bodyW*0.15, bodyLen*0.11, bodyW*0.28, 0.3, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(-bodyLen*0.12, bodyW*0.2, bodyLen*0.09, bodyW*0.22, -0.4, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  const koiList = [];
+  function addKoi(){
+    const cx = W/2, cy = H/2, R = Math.min(W,H)/2 - 40;
+    const a = rand(0,Math.PI*2), r = rand(0,R*0.6);
+    koiList.push(new Koi(cx + Math.cos(a)*r, cy + Math.sin(a)*r));
+  }
+
+  // ---------- drawing ----------
+  function drawWater(){
+    const cx = W/2, cy = H/2, R = Math.min(W,H)/2;
+    const g = ctx.createRadialGradient(cx, cy*0.7, R*0.1, cx, cy, R);
+    const deep = getComputedStyle(document.body).getPropertyValue('--water-deep').trim();
+    const mid = getComputedStyle(document.body).getPropertyValue('--water-mid').trim();
+    const light = getComputedStyle(document.body).getPropertyValue('--water-light').trim();
+    g.addColorStop(0, light);
+    g.addColorStop(0.55, mid);
+    g.addColorStop(1, deep);
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  function drawPads(t){
+    for(const p of pads){
+      const x = p.x*W + Math.sin(t*p.driftSpeed + p.driftPhase)*4;
+      const y = p.y*H + Math.cos(t*p.driftSpeed*0.8 + p.driftPhase)*4;
+      ctx.save();
+      ctx.translate(x,y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = isNight ? 'rgba(60,110,90,0.55)' : 'rgba(90,150,110,0.65)';
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0,0,p.r,0.35,Math.PI*2-0.35);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawFoods(){
+    for(const f of foods){
+      if(f.eaten) continue;
+      ctx.beginPath();
+      ctx.fillStyle = '#f0d27a';
+      ctx.arc(f.x, f.y, f.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function drawRipples(dt){
+    for(let i=ripples.length-1;i>=0;i--){
+      const r = ripples[i];
+      r.r += r.speed * dt * 60 * 0.4;
+      r.alpha *= 0.965;
+      if(r.alpha < 0.01){ ripples.splice(i,1); continue; }
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(255,255,255,${r.alpha})`;
+      ctx.lineWidth = 1.4;
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+      ctx.stroke();
+    }
+  }
+
+  function drawBubbles(t){
+    ctx.fillStyle = isNight ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.35)';
+    for(const b of bubbles){
+      const x = b.x*W + Math.sin(t*0.5 + b.wobble)*6;
+      const y = ( (b.y - t*b.speed*0.02) % 1 + 1) % 1 * H;
+      ctx.beginPath();
+      ctx.arc(x,y,b.r,0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function drawStars(t){
+    if(!isNight) return;
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for(let i=0;i<18;i++){
+      const x = (i*97 % 100)/100*W;
+      const y = (i*53 % 100)/100*H*0.4;
+      const tw = 0.5 + 0.5*Math.sin(t*1.5+i);
+      ctx.globalAlpha = 0.15 + tw*0.2;
+      ctx.beginPath();
+      ctx.arc(x,y,1.2,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- main loop ----------
+  let last = performance.now();
+  let elapsed = 0;
+  function loop(now){
+    const dt = Math.min((now-last)/16.67, 3);
+    last = now;
+    elapsed += dt*0.016;
+
+    ctx.clearRect(0,0,W,H);
+    drawWater();
+    drawStars(elapsed);
+    drawBubbles(elapsed);
+    drawPads(elapsed);
+    drawFoods();
+
+    for(const k of koiList){ k.update(dt); }
+    for(const k of koiList){ k.draw(ctx); }
+
+    drawRipples(dt);
+
+    // clean up eaten food
+    for(let i=foods.length-1;i>=0;i--){
+      if(foods[i].eaten) foods.splice(i,1);
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- input ----------
+  function pointFromEvent(e){
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    return { x: cx, y: cy };
+  }
+  canvas.addEventListener('pointerdown', (e)=>{
+    const p = pointFromEvent(e);
+    dropFood(p.x, p.y);
+    addRipple(p.x, p.y, 1);
+    if(!hint.classList.contains('hidden')){
+      hint.classList.add('hidden');
+    }
+  });
+
+  timeToggle.addEventListener('click', ()=>{
+    isNight = !isNight;
+    document.body.setAttribute('data-time', isNight ? 'night' : 'day');
+    timeToggle.textContent = isNight ? '🌙 night' : '☀️ day';
+  });
+
+  addFishBtn.addEventListener('click', ()=>{
+    if(koiList.length < 9) addKoi();
+  });
+
+  // ---------- init ----------
+  function init(){
+    resize();
+    makePads(4);
+    seedBubbles(14);
+    for(let i=0;i<3;i++) addKoi();
+    requestAnimationFrame(loop);
+    setTimeout(()=>{ hint.classList.add('hidden'); }, 4200);
+  }
+
+  window.addEventListener('load', init);
+  window.addEventListener('resize', ()=>{ resize(); });
+})();
+</script>
+</body>
+</html>
